@@ -4,7 +4,7 @@ TOOLS={**T,**O}
 exec(open("config.py").read())
 SITE=os.environ.get("BASE_URL",BASE_URL).rstrip("/")
 KEY=open(".indexnow_key").read().strip()
-GSC="<!-- GSC_VERIFICATION: paste <meta name=\"google-site-verification\" content=\"...\"> here -->"
+GSC='<meta name="google-site-verification" content="tUSgNieMfnEGtYO6ftaOrCspkGS1s--0r4vVz2ilGL8" />'
 CATS={}
 for k,v in TOOLS.items():CATS.setdefault(v['cat'],[]).append(k)
 ORDER=["PDF tools","File converters","Spreadsheet tools","Text tools","Date & time","Pay & money","Productivity"]
