@@ -18,17 +18,56 @@ function bestQuad(H){var n=H.length;if(n<4)return null;var step=Math.max(1,Math.
 S.order=function(q){var cx=0,cy=0;q.forEach(function(p){cx+=p[0]/4;cy+=p[1]/4});q=q.slice().sort(function(a,b){return Math.atan2(a[1]-cy,a[0]-cx)-Math.atan2(b[1]-cy,b[0]-cx)});
  var k=0,mn=Infinity;q.forEach(function(p,i){if(p[0]+p[1]<mn){mn=p[0]+p[1];k=i}});return [0,1,2,3].map(function(i){return q[(k+i)%4]})}; /* tl,tr,br,bl (clockwise in screen coords) */
 /* detect document quad in an image/canvas. Returns [[x,y]x4] in source pixel coords, or null. */
-S.detect=function(src){var W=src.naturalWidth||src.width,H=src.naturalHeight||src.height,sc=Math.min(1,400/Math.max(W,H)),w=Math.max(8,Math.round(W*sc)),h=Math.max(8,Math.round(H*sc));
- var c=document.createElement('canvas');c.width=w;c.height=h;var x=c.getContext('2d');x.drawImage(src,0,0,w,h);var g=boxBlur(gray(x.getImageData(0,0,w,h).data,w*h),w,h,2),th=S.otsu(g);
- var cand=[];[1,0].forEach(function(bright){var lab=new Int32Array(w*h).fill(-1),stack=new Int32Array(w*h),bestN=0,bestPts=null,id=0;
-  for(var s=0;s<w*h;s++){if(lab[s]>=0||((g[s]>th)?1:0)!==bright)continue;var sp=0,cnt=0,pts=[],touch=0;stack[sp++]=s;lab[s]=id;
-   while(sp){var p=stack[--sp],px=p%w,py=(p-px)/w;cnt++;if(px===0||py===0||px===w-1||py===h-1)touch++;
-    var nb=[px>0?p-1:-1,px<w-1?p+1:-1,py>0?p-w:-1,py<h-1?p+w:-1];for(var k=0;k<4;k++){var q=nb[k];if(q>=0&&lab[q]<0&&((g[q]>th)?1:0)===bright){lab[q]=id;stack[sp++]=q}}
-    var C=function(q){return (g[q]>th?1:0)!==bright};if(px===0||py===0||px===w-1||py===h-1||C(p-1)||C(p+1)||C(p-w)||C(p+w))pts.push([px,py])}
-   if(cnt>bestN&&touch<0.5*(2*w+2*h)){bestN=cnt;bestPts=pts}id++}
-  if(bestPts&&bestN>0.08*w*h&&bestN<0.97*w*h){var hl=hull(bestPts),q=bestQuad(hl);if(q){var a=area(q),fill=bestN/a;cand.push({q:q,score:a*(fill>1.05?0:Math.min(1,fill))*(bright?1.15:1),a:a})}}});
- if(!cand.length)return null;cand.sort(function(a,b){return b.score-a.score});var best=cand[0];if(best.a<0.1*w*h)return null;
- return S.order(best.q.map(function(p){return [Math.max(0,Math.min(W,(p[0]+0.5)/sc)),Math.max(0,Math.min(H,(p[1]+0.5)/sc))]}))};
+function convex(q){var sg=0;for(var i=0;i<4;i++){var a=q[i],b=q[(i+1)%4],c=q[(i+2)%4],z=(b[0]-a[0])*(c[1]-b[1])-(b[1]-a[1])*(c[0]-b[0]);if(!z)return false;if(!sg)sg=z>0?1:-1;else if((z>0?1:-1)!==sg)return false}return true}
+function minAngle(q){var m=180;for(var i=0;i<4;i++){var a=q[(i+3)%4],b=q[i],c=q[(i+1)%4],v1=[a[0]-b[0],a[1]-b[1]],v2=[c[0]-b[0],c[1]-b[1]],t=Math.acos(Math.max(-1,Math.min(1,(v1[0]*v2[0]+v1[1]*v2[1])/(Math.hypot(v1[0],v1[1])*Math.hypot(v2[0],v2[1])||1))))*180/Math.PI;m=Math.min(m,t)}return m}
+/* candidates: largest connected component of a binary mask -> hull -> best inscribed quad */
+function comp(mask,w,h){var lab=new Int32Array(w*h).fill(-1),stack=new Int32Array(w*h),best=null,id=0;
+ for(var s=0;s<w*h;s++){if(lab[s]>=0||!mask[s])continue;var sp=0,cnt=0,pts=[],touch=0;stack[sp++]=s;lab[s]=id;
+  while(sp){var p=stack[--sp],px=p%w,py=(p-px)/w;cnt++;var edge=px===0||py===0||px===w-1||py===h-1;if(edge)touch++;
+   if(edge||!mask[p-1]||!mask[p+1]||!mask[p-w]||!mask[p+w])pts.push([px,py]);
+   if(px>0&&lab[p-1]<0&&mask[p-1]){lab[p-1]=id;stack[sp++]=p-1}if(px<w-1&&lab[p+1]<0&&mask[p+1]){lab[p+1]=id;stack[sp++]=p+1}if(py>0&&lab[p-w]<0&&mask[p-w]){lab[p-w]=id;stack[sp++]=p-w}if(py<h-1&&lab[p+w]<0&&mask[p+w]){lab[p+w]=id;stack[sp++]=p+w}}
+  if((!best||cnt>best.n)&&touch<0.5*(2*w+2*h))best={n:cnt,pts:pts};id++}return best}
+function evalMask(mask,w,h,bonus,out,G){var c=comp(mask,w,h);if(!c||c.n<0.08*w*h||c.n>0.97*w*h)return;var q=bestQuad(hull(c.pts));if(!q||!convex(q))return;var a=area(q),fill=c.n/a;if(fill>1.08||fill<0.6)return;var ma=minAngle(S.order(q));if(ma<35)return;
+ var sup=G?support(S.order(q),G,w,h):1;out.push({q:q,a:a,sup:sup,score:a*fill*fill*Math.min(1,ma/60)*bonus*sup*sup*sup})}
+/* fraction of the quad's perimeter lying on a strong image edge */
+function support(q,G,w,h){var hit=0,tot=0;for(var k=0;k<4;k++){var A=q[k],B=q[(k+1)%4],L=Math.hypot(B[0]-A[0],B[1]-A[1]),nx=-(B[1]-A[1])/L,ny=(B[0]-A[0])/L;for(var t=0.05;t<0.95;t+=0.9/40){var x=A[0]+(B[0]-A[0])*t,y=A[1]+(B[1]-A[1])*t,mx=0;for(var d=-3;d<=3;d++){var X=Math.round(x+nx*d),Y=Math.round(y+ny*d);if(X>0&&Y>0&&X<w-1&&Y<h-1)mx=Math.max(mx,G.m[Y*w+X])}tot++;if(mx>G.t)hit++}}return tot?hit/tot:0}
+/* edge map (Sobel magnitude) closed into regions: robust for low-contrast backgrounds */
+function grad(g,w,h){var m=new Float32Array(w*h),x,y;for(y=1;y<h-1;y++)for(x=1;x<w-1;x++){var i=y*w+x,gx=g[i-w+1]+2*g[i+1]+g[i+w+1]-g[i-w-1]-2*g[i-1]-g[i+w-1],gy=g[i+w-1]+2*g[i+w]+g[i+w+1]-g[i-w-1]-2*g[i-w]-g[i-w+1];m[i]=Math.hypot(gx,gy)}return {m:m,t:Math.max(40,pctF(m,0.9))}}
+function edgeMask(g,w,h){var m=new Float32Array(w*h),x,y,mx=0;for(y=1;y<h-1;y++)for(x=1;x<w-1;x++){var i=y*w+x,gx=g[i-w+1]+2*g[i+1]+g[i+w+1]-g[i-w-1]-2*g[i-1]-g[i+w-1],gy=g[i+w-1]+2*g[i+w]+g[i+w+1]-g[i-w-1]-2*g[i-w]-g[i-w+1],v=Math.hypot(gx,gy);m[i]=v;if(v>mx)mx=v}
+ var t=pctF(m,0.9),e=new Uint8Array(w*h);for(var i2=0;i2<w*h;i2++)e[i2]=m[i2]>t?1:0;
+ /* fill: pixels not reachable from the border without crossing an edge = inside the document outline */
+ var d=dilate(e,w,h,2),out=new Uint8Array(w*h).fill(1),st=[];for(x=0;x<w;x++){st.push(x,(h-1)*w+x)}for(y=0;y<h;y++){st.push(y*w,y*w+w-1)}
+ while(st.length){var p=st.pop();if(!out[p]||d[p])continue;out[p]=0;var px=p%w;if(px>0)st.push(p-1);if(px<w-1)st.push(p+1);if(p>=w)st.push(p-w);if(p<w*(h-1))st.push(p+w)}return out}
+function dilate(e,w,h,r){var o=new Uint8Array(w*h);for(var y=0;y<h;y++)for(var x=0;x<w;x++){if(!e[y*w+x])continue;for(var dy=-r;dy<=r;dy++)for(var dx=-r;dx<=r;dx++){var X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<w&&Y<h)o[Y*w+X]=1}}return o}
+function pctF(a,p){var b=Array.prototype.slice.call(a).sort(function(x,y){return x-y});return b[Math.floor(p*(b.length-1))]}
+/* detect document quad (multi-scale, multi-threshold, plus edge-based fallback). Returns [[x,y]x4] in source px or null. */
+S.detect=function(src){var W=src.naturalWidth||src.width,H=src.naturalHeight||src.height,all=[];
+ [360,560].forEach(function(T){var sc=Math.min(1,T/Math.max(W,H)),w=Math.max(8,Math.round(W*sc)),h=Math.max(8,Math.round(H*sc)),c=document.createElement('canvas');c.width=w;c.height=h;var x=c.getContext('2d');x.drawImage(src,0,0,w,h);
+  var g=boxBlur(gray(x.getImageData(0,0,w,h).data,w*h),w,h,2),th=S.otsu(g),loc=boxBlur(g,w,h,Math.round(Math.max(w,h)/8)),out=[],i,n=w*h;
+  var G=grad(g,w,h);[th,th-18,th+18,th+36].forEach(function(t){var mb=new Uint8Array(n),md=new Uint8Array(n);for(i=0;i<n;i++){mb[i]=g[i]>t?1:0;md[i]=1-mb[i]}evalMask(mb,w,h,1.15,out,G);evalMask(md,w,h,0.9,out,G)});
+  var ma=new Uint8Array(n);for(i=0;i<n;i++)ma[i]=g[i]>loc[i]+6?1:0;evalMask(ma,w,h,1,out,G);evalMask(edgeMask(g,w,h),w,h,0.95,out,G);
+  out.forEach(function(o){o.q=o.q.map(function(p){return [Math.max(0,Math.min(W,(p[0]+0.5)/sc)),Math.max(0,Math.min(H,(p[1]+0.5)/sc))]});o.a/=sc*sc;o.score/=sc*sc;all.push(o)})});
+ if(!all.length)return null;all.sort(function(a,b){return b.score-a.score});if(all[0].a<0.1*W*H||all[0].sup<0.45)return null;return S.order(all[0].q)};
+/* ---- text-based deskew & orientation ---- */
+function inkPoints(cv,maxDim){var k=Math.min(1,(maxDim||900)/Math.max(cv.width,cv.height)),w=Math.max(8,Math.round(cv.width*k)),h=Math.max(8,Math.round(cv.height*k)),c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(cv,0,0,w,h);
+ var g=gray(c.getContext('2d').getImageData(0,0,w,h).data,w*h),m=boxBlur(g,w,h,Math.max(4,Math.round(Math.max(w,h)/50))),P=[],mg=Math.round(Math.min(w,h)*0.03);
+ for(var y=mg;y<h-mg;y++)for(var x=mg;x<w-mg;x++){var i=y*w+x;if(g[i]<m[i]*0.8&&g[i]<170&&m[i]>135)P.push(x,y)}return {P:P,w:w,h:h}}
+function profScore(I,deg,vertical){var a=deg*Math.PI/180,c=Math.cos(a),s=Math.sin(a),P=I.P,D=Math.ceil(Math.hypot(I.w,I.h))+2,b=new Float64Array(2*D),i,v;
+ for(i=0;i<P.length;i+=2){v=vertical?P[i]*c+P[i+1]*s:-P[i]*s+P[i+1]*c;b[(v+D)|0]++}var sc=0;for(i=1;i<b.length;i++){var d=b[i]-b[i-1];sc+=d*d}return sc}
+function bestAngle(I,vertical,range){var best=0,bs=-1,a;for(a=-range;a<=range;a+=1){var t=profScore(I,a,vertical);if(t>bs){bs=t;best=a}}var c=best;for(a=c-1;a<=c+1;a+=0.1){var t2=profScore(I,a,vertical);if(t2>bs){bs=t2;best=a}}return {angle:Math.round(best*10)/10,score:bs}}
+/* returns degrees to rotate (clockwise positive) so text lines become horizontal */
+S.skew=function(cv){var I=inkPoints(cv);if(I.P.length<400)return 0;return -bestAngle(I,false,20).angle};
+S.rotateFine=function(cv,deg,keep){if(!deg||Math.abs(deg)<0.05)return cv;var a=deg*Math.PI/180,W=cv.width,H=cv.height,nw=keep?W:Math.round(Math.abs(W*Math.cos(a))+Math.abs(H*Math.sin(a))),nh=keep?H:Math.round(Math.abs(W*Math.sin(a))+Math.abs(H*Math.cos(a)));
+ var d=cv.getContext('2d').getImageData(0,0,W,H).data,r=0,g=0,b=0,n=0;for(var i=0;i<d.length;i+=4*97){var l=d[i]+d[i+1]+d[i+2];if(l>540){r+=d[i];g+=d[i+1];b+=d[i+2];n++}}
+ var o=document.createElement('canvas');o.width=nw;o.height=nh;var x=o.getContext('2d');x.fillStyle=n?'rgb('+(r/n|0)+','+(g/n|0)+','+(b/n|0)+')':'#fff';x.fillRect(0,0,nw,nh);x.translate(nw/2,nh/2);x.rotate(a);x.imageSmoothingQuality='high';x.drawImage(cv,-W/2,-H/2);return o};
+/* quarter turns (0-3, clockwise) needed so text is upright. Lines vs columns by projection profile; 180° by ascender/descender asymmetry. */
+S.orient=function(cv){var I=inkPoints(cv,700);if(I.P.length<400)return 0;var hz=bestAngle(I,false,4).score,vt=bestAngle(I,true,4).score,q=0;
+ if(vt>hz*1.3){q=1;cv=S.rotate(cv,1);I=inkPoints(cv,700)}
+ return (q+(S.upsideDown(I)?2:0))%4};
+S.upsideDown=function(I){var h=I.h,prof=new Float64Array(h),P=I.P,i;for(i=1;i<P.length;i+=2)prof[P[i]]++;var mx=0;for(i=0;i<h;i++)mx=Math.max(mx,prof[i]);var up=0,dn=0,y=0;
+ while(y<h){if(prof[y]<mx*0.06){y++;continue}var y0=y;while(y<h&&prof[y]>=mx*0.06)y++;var y1=y,lm=0,j;if(y1-y0<4)continue;for(j=y0;j<y1;j++)lm=Math.max(lm,prof[j]);
+  var c0=-1,c1=-1;for(j=y0;j<y1;j++)if(prof[j]>=lm*0.45){if(c0<0)c0=j;c1=j}var a=0,b=0,tot=0;for(j=y0;j<c0;j++)a+=prof[j];for(j=c1+1;j<y1;j++)b+=prof[j];for(j=y0;j<y1;j++)tot+=prof[j];if(tot){up+=a;dn+=b}}
+ return dn>up*1.25};
 S.fullQuad=function(W,H,inset){var m=inset||0;return [[m*W,m*H],[W-m*W,m*H],[W-m*W,H-m*H],[m*W,H-m*H]]};
 function solve(A,b){var n=b.length,i,j,k;for(i=0;i<n;i++){var mx=i;for(k=i+1;k<n;k++)if(Math.abs(A[k][i])>Math.abs(A[mx][i]))mx=k;var t=A[i];A[i]=A[mx];A[mx]=t;t=b[i];b[i]=b[mx];b[mx]=t;
  for(k=i+1;k<n;k++){var f=A[k][i]/A[i][i];for(j=i;j<n;j++)A[k][j]-=f*A[i][j];b[k]-=f*b[i]}}var x=new Array(n);for(i=n-1;i>=0;i--){var s=b[i];for(j=i+1;j<n;j++)s-=A[i][j]*x[j];x[i]=s/A[i][i]}return x}

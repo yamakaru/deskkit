@@ -8,3 +8,4 @@ python3 tests/make_scans.py
 node tests/test_core.js
 node tests/test_browser.js
 node tests/test_scan.js
+node tests/test_scan2.js

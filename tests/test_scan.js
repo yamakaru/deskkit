@@ -24,7 +24,7 @@ await p.selectOption('#flt','enhance');
 await p.click('#rr');let rs=await p.evaluate(()=>[APP.pages[APP.cur].out.width,APP.pages[APP.cur].out.height]);ok('rotate swaps dimensions',rs[0]>rs[1],rs);await p.click('#rl');
 const nm0=await p.evaluate(()=>APP.pages.map(x=>x.name).join());await p.locator('.pg').nth(1).locator('button').first().click();ok('reorder pages',await p.evaluate(()=>APP.pages.map(x=>x.name).join())==='scan2.jpg,scan1.jpg',nm0);
 // drag a corner
-await p.locator('#ec').scrollIntoViewIfNeeded();const before=await p.evaluate(()=>APP.pages[APP.cur].quad.map(v=>v.slice()));const bb=await p.locator('#ec').boundingBox();const sc=await p.evaluate(()=>document.querySelector('#ec').getBoundingClientRect().width/APP.pages[APP.cur].src.width);
+await p.click('#adjb');await p.locator('#ec').scrollIntoViewIfNeeded();const before=await p.evaluate(()=>APP.pages[APP.cur].quad.map(v=>v.slice()));const bb=await p.locator('#ec').boundingBox();const sc=await p.evaluate(()=>document.querySelector('#ec').getBoundingClientRect().width/APP.pages[APP.cur].src.width);
 const c0=[bb.x+before[0][0]*sc,bb.y+before[0][1]*sc];await p.mouse.move(c0[0],c0[1]);await p.mouse.down();await p.mouse.move(c0[0]+30,c0[1]+25,{steps:5});await p.mouse.up();
 const after=await p.evaluate(()=>APP.pages[APP.cur].quad);ok('drag corner moves it',Math.hypot(after[0][0]-before[0][0],after[0][1]-before[0][1])>20);await p.click('#auto');
 // PDF
@@ -47,7 +47,7 @@ const mctx=await br.newContext({...devices['iPhone 13'],acceptDownloads:true});p
 ok('mobile: camera input uses rear camera',await p.getAttribute('#cam','capture')==='environment');
 await p.setInputFiles('#cam',path.join(S,'scan1.jpg'));await p.waitForFunction(()=>APP.pages.length===1,null,{timeout:60000});
 const ov=await p.evaluate(()=>({sw:document.documentElement.scrollWidth,vw:innerWidth,cw:document.querySelector('#ec').getBoundingClientRect().width}));ok('mobile: no horizontal overflow, editor fits screen',ov.sw<=ov.vw&&ov.cw<=ov.vw,ov);
-const mb=await p.locator('#ec').boundingBox(),mq=await p.evaluate(()=>APP.pages[0].quad.map(v=>v.slice())),ms=await p.evaluate(()=>document.querySelector('#ec').getBoundingClientRect().width/APP.pages[0].src.width);
+await p.click('#adjb');const mb=await p.locator('#ec').boundingBox(),mq=await p.evaluate(()=>APP.pages[0].quad.map(v=>v.slice())),ms=await p.evaluate(()=>document.querySelector('#ec').getBoundingClientRect().width/APP.pages[0].src.width);
 const cx=mb.x+mq[2][0]*ms,cy=mb.y+mq[2][1]*ms;await p.dispatchEvent('#ec','pointerdown',{clientX:cx,clientY:cy,pointerId:1,isPrimary:true,pointerType:'touch'});await p.dispatchEvent('#ec','pointermove',{clientX:cx-20,clientY:cy-20,pointerId:1,pointerType:'touch'});await p.dispatchEvent('#ec','pointerup',{clientX:cx-20,clientY:cy-20,pointerId:1,pointerType:'touch'});
 const mq2=await p.evaluate(()=>APP.pages[0].quad);ok('mobile: touch-drag corner',Math.hypot(mq2[2][0]-mq[2][0],mq2[2][1]-mq[2][1])>10);
 await p.click('#pdf');b=await dl(p,'.fileout button');ok('mobile: PDF export',(await PDFDocument.load(b)).getPageCount()===1);await p.screenshot({path:path.join(OUT,'scanner_mobile.png'),fullPage:false});ok('mobile: no JS errors',!p.errs.length,p.errs);

@@ -8,12 +8,13 @@ def paper(lines):
     d.text((110,110),lines[0],font=ImageFont.truetype(FB,72),fill=(20,20,30));y=260
     for l in lines[1:]:
         d.text((110,y),l,font=ImageFont.truetype(F,40),fill=(30,30,40));y+=70
-    d.rectangle([110,y+30,1165,y+34],fill=(40,40,120));return im
+    if len(lines)<8:d.rectangle([110,y+30,1165,y+34],fill=(40,40,120))
+    return im
 def coeffs(dst,src):
     A=[];b=[]
     for (x,y),(u,v) in zip(dst,src):A+=[[x,y,1,0,0,0,-u*x,-u*y],[0,0,0,x,y,1,-v*x,-v*y]];b+=[u,v]
     return np.linalg.solve(np.array(A,float),np.array(b,float)).tolist()
-def photo(name,lines,quad,size,bg):
+def photo(name,lines,quad,size,bg,exif=None,crop=None):
     W,H=size;p=paper(lines);pw,ph=p.size
     base=np.random.normal(0,14,(H,W,3))+np.array(bg,float)
     if bg[0]>bg[2]: base+=np.sin(np.arange(W)/9.0)[None,:,None]*10  # wood grain
@@ -26,7 +27,11 @@ def photo(name,lines,quad,size,bg):
     bgim=Image.composite(Image.new("RGB",(W,H),(0,0,0)),bgim,sh)
     im=Image.composite(warped,bgim,mask)
     a=np.asarray(im).astype(float);g=np.linspace(1.0,0.78,W)[None,:,None]*np.linspace(1.0,0.9,H)[:,None,None]   # uneven lighting
-    a=a*g+np.random.normal(0,4,a.shape);Image.fromarray(np.clip(a,0,255).astype("uint8")).save(f"tests/samples/{name}",quality=88)
+    a=a*g+np.random.normal(0,4,a.shape);out=Image.fromarray(np.clip(a,0,255).astype("uint8"))
+    if crop:out=out.crop(crop)
+    if exif:
+        ex=Image.Exif();ex[0x0112]=6;out.rotate(90,expand=True).save(f"tests/samples/{name}",quality=85,exif=ex)
+    else:out.save(f"tests/samples/{name}",quality=88)
     return quad
 def cam(size,tilt_x,tilt_y,rot_z,dist,f,shift=(0,0)):
     """Project an 8.5x11 sheet through a pinhole camera centred on the image -> physically consistent corners."""
@@ -42,6 +47,11 @@ L1=["INVOICE 10457","Bill to: Northwind Traders","Date: October 20, 2026","Consu
 L2=["MEETING NOTES","Project kickoff with the design team","Agree on budget and timeline","Next review on Friday afternoon","Owner: Jordan Smith"]
 Q={"scan1.jpg":photo("scan1.jpg",L1,cam((1500,2000),18,-8,3,16,1500),(1500,2000),(105,70,45)),
    "scan2.jpg":photo("scan2.jpg",L2,cam((1600,1700),-10,12,-22,17,1500,(0.4,0)),(1600,1700),(70,72,78))}
+L3=["QUARTERLY REPORT","Revenue grew in every region this quarter.","Customer retention improved to 94 percent.","Shipping times fell by two days on average.","The board approved the new hiring plan.","Marketing spend stays flat until January.","Please send comments by Friday evening.","Thank you for your hard work this year.","Questions go to the finance team directly.","Next meeting: Tuesday at ten in room four."]
+Q["scan3_exif.jpg"]=photo("scan3_exif.jpg",L3,cam((3024,4032),14,-10,28,15,3000),(3024,4032),(172,170,164),exif=True)
+Q["scan4_upside.jpg"]=photo("scan4_upside.jpg",L3,cam((1500,2000),-12,6,186,16,1500),(1500,2000),(105,70,45))
+Q["scan6_sideways.jpg"]=photo("scan6_sideways.jpg",L3,cam((2000,1500),8,-6,94,16,1500),(2000,1500),(70,72,78))
+photo("scan5_noedge.jpg",L3,cam((1400,1800),0,0,-7,11.2,1500),(1400,1800),(90,90,95),crop=(150,150,1250,1650))
 json.dump(Q,open("tests/samples/scans.json","w"))
 paper(L1).save("tests/samples/ocr_clean.png")
 print("ok")
