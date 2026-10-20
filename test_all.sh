@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build and run all DeskKit tests (unit + real-browser end-to-end).
+# Build and run all FileMoss tests (unit + real-browser end-to-end).
 set -e
 cd "$(dirname "$0")"
 python3 build.py

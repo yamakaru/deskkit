@@ -1,4 +1,4 @@
-/* DeskKit browser helpers. Everything runs locally; no file is uploaded. */
+/* FileMoss browser helpers. Everything runs locally; no file is uploaded. */
 var UI=(function(){var U={};
 U.$=function(s,r){return (r||document).querySelector(s)};
 U.loadScript=function(src){return new Promise(function(ok,no){if(document.querySelector('script[src="'+src+'"]'))return ok();var s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=function(){no(new Error('Could not load '+src))};document.head.appendChild(s)})};
@@ -18,7 +18,7 @@ U.results=function(items){var box=U.$('#out');box.innerHTML='';U._items=items;it
  row.innerHTML='<span class="fn"></span><span class="fs"></span><button class="btn sm" type="button">Download</button>';row.querySelector('.fn').textContent=it.name;row.querySelector('.fs').textContent=DK.fileSize(it.blob.size)+(it.note?' · '+it.note:'');
  row.querySelector('button').onclick=function(){U.download(it.blob,it.name)};box.appendChild(row)});
  if(items.length>1){var z=document.createElement('button');z.className='btn';z.type='button';z.textContent='Download all ('+items.length+') as ZIP';z.onclick=function(){U.zip(items)};box.appendChild(z)}};
-U.zip=function(items,name){return U.loadScript('/assets/jszip.min.js').then(function(){var z=new JSZip(),used={};items.forEach(function(it){var n=it.name,k=1;while(used[n])n=it.name.replace(/(\.[^.]+)?$/,'-'+(++k)+'$1');used[n]=1;z.file(n,it.blob)});return z.generateAsync({type:'blob'})}).then(function(b){U.download(b,name||'deskkit-files.zip')})};
+U.zip=function(items,name){return U.loadScript('/assets/jszip.min.js').then(function(){var z=new JSZip(),used={};items.forEach(function(it){var n=it.name,k=1;while(used[n])n=it.name.replace(/(\.[^.]+)?$/,'-'+(++k)+'$1');used[n]=1;z.file(n,it.blob)});return z.generateAsync({type:'blob'})}).then(function(b){U.download(b,name||'filemoss-files.zip')})};
 /* image decode incl. HEIC */
 U.isHeic=function(f){return /\.(heic|heif)$/i.test(f.name)||/image\/hei[cf]/.test(f.type)};
 U.decode=function(file){var p=U.isHeic(file)?U.loadScript('/assets/heic2any.min.js').then(function(){return heic2any({blob:file,toType:'image/png'})}).then(function(b){return Array.isArray(b)?b[0]:b}):Promise.resolve(file);

@@ -1,4 +1,4 @@
-/* DeskKit core logic – pure functions, shared by pages and tests. */
+/* FileMoss core logic – pure functions, shared by pages and tests. */
 (function(root,f){if(typeof module==='object'&&module.exports)module.exports=f();else root.DK=f();})(this,function(){
 var DK={};
 DK.esc=function(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};

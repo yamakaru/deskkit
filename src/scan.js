@@ -1,4 +1,4 @@
-/* DeskKit document scanner core: edge detection, perspective warp, scan filters. Pure canvas/JS, no uploads. */
+/* FileMoss document scanner core: edge detection, perspective warp, scan filters. Pure canvas/JS, no uploads. */
 var Scan=(function(){var S={};
 function gray(d,n){var g=new Float32Array(n);for(var i=0,j=0;i<n;i++,j+=4)g[i]=0.299*d[j]+0.587*d[j+1]+0.114*d[j+2];return g}
 function boxBlur(a,w,h,r){var t=new Float32Array(w*h),o=new Float32Array(w*h),x,y,s,k;
