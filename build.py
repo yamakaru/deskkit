@@ -4,7 +4,7 @@ TOOLS={**T,**O}
 exec(open("config.py").read())
 SITE=os.environ.get("BASE_URL",BASE_URL).rstrip("/")
 KEY=open(".indexnow_key").read().strip()
-GSC='<meta name="google-site-verification" content="tUSgNieMfnEGtYO6ftaOrCspkGS1s--0r4vVz2ilGL8" />'
+GSC='<meta name="google-site-verification" content="tUSgNieMfnEGtYO6ftaOrCspkGS1s--0r4vVz2ilGL8" /><meta name="google-site-verification" content="F9hfBJhEt1anaSEgH8R34bYWu4ST6Jw_kzXOBEz-K8Q" />'
 CATS={}
 for k,v in TOOLS.items():CATS.setdefault(v['cat'],[]).append(k)
 # Popularity rank: estimated global monthly searches (Ahrefs/Semrush public data on ilovepdf/smallpdf/11zon top keywords, Oct 2026)
