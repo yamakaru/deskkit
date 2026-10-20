@@ -49,3 +49,6 @@ open("dist/sitemap.xml","w").write('<?xml version="1.0" encoding="UTF-8"?><urlse
 open(f"dist/{KEY}.txt","w").write(KEY)
 open("dist/404.html","w").write(open("dist/index.html").read())
 print(len(TOOLS),"tools built")
+
+# Host canonicalisation: *.pages.dev and www -> apex (301, path + query preserved)
+open("dist/_worker.js","w").write("""export default{async fetch(req,env){const u=new URL(req.url),h=u.hostname,apex=new URL(SITE).hostname;if(h!==apex&&h!=='localhost'&&(h.endsWith('.pages.dev')||h==='www.'+apex)){return Response.redirect(SITE+u.pathname+u.search,301)}return env.ASSETS.fetch(req)}};""".replace("SITE+","'"+SITE+"'+").replace("new URL(SITE)","new URL('"+SITE+"')"))
