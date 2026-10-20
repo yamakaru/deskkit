@@ -5,15 +5,15 @@ const {PDFDocument}=require('pdf-lib'),XLSX=require('xlsx'),jsQR=require('jsqr')
 const DIST=path.join(__dirname,'../dist'),S=path.join(__dirname,'samples'),OUT=path.join(__dirname,'out');fs.mkdirSync(OUT,{recursive:true});
 const MIME={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.svg':'image/svg+xml','.txt':'text/plain','.xml':'application/xml'};
 const srv=http.createServer((q,r)=>{let p=decodeURIComponent(q.url.split('?')[0]);if(p.endsWith('/'))p+='index.html';const f=path.join(DIST,p);if(!fs.existsSync(f)){r.writeHead(404);return r.end()}r.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(r)});
-let n=0,fail=0;const ok=(name,c,info)=>{n++;if(!c){fail++;console.log('FAIL',name,info===undefined?'':info)}else console.log('ok  ',name)};
+const LOC=!!process.env.LP;let n=0,fail=0;const ok=(name,c,info)=>{n++;if(!c){fail++;console.log('FAIL',name,info===undefined?'':info)}else console.log('ok  ',name)};
 const magic=(b,kind)=>({jpg:b[0]==0xFF&&b[1]==0xD8,png:b.slice(1,4).toString()=='PNG',webp:b.slice(0,4).toString()=='RIFF'&&b.slice(8,12).toString()=='WEBP',pdf:b.slice(0,4).toString()=='%PDF',zip:b.slice(0,2).toString()=='PK'})[kind];
 function dims(b){if(b[1]==0x50)return [b.readUInt32BE(16),b.readUInt32BE(20)];let i=2;while(i<b.length){if(b[i]!=0xFF)return null;const m=b[i+1],L=b.readUInt16BE(i+2);if(m>=0xC0&&m<=0xC3)return [b.readUInt16BE(i+7),b.readUInt16BE(i+5)];i+=2+L}return null}
 (async()=>{await new Promise(r=>srv.listen(8765,r));const B=process.env.BASE||'http://localhost:8765';
 const br=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox']});const ctx=await br.newContext({acceptDownloads:true});
-async function open(slug){const p=await ctx.newPage();p.errs=[];p.on('pageerror',e=>p.errs.push(e.message));p.on('console',m=>{if(m.type()==='error')p.errs.push(m.text())});await p.goto(B+'/'+slug+'/');return p}
+async function open(slug){const p=await ctx.newPage();p.errs=[];p.on('pageerror',e=>p.errs.push(e.message));p.on('console',m=>{if(m.type()==='error')p.errs.push(m.text())});await p.goto(B+(process.env.LP||'')+'/'+slug+'/');return p}
 async function files(p,list){await p.setInputFiles('#drop input',list.map(f=>path.join(S,f)))}
 async function dl(p,sel,i=0){await p.waitForSelector(sel,{timeout:60000});const [d]=await Promise.all([p.waitForEvent('download'),p.locator(sel).nth(i).click()]);const f=path.join(OUT,d.suggestedFilename());await d.saveAs(f);return [fs.readFileSync(f),d.suggestedFilename()]}
-const pages=fs.readdirSync(DIST).filter(d=>fs.existsSync(path.join(DIST,d,'index.html')));
+const pages=fs.readdirSync(DIST).filter(d=>!/^[a-z]{2}$/.test(d)&&fs.existsSync(path.join(DIST,d,'index.html')));
 for(const s of ['',...pages]){const p=await open(s);await p.waitForTimeout(300);ok('loads without JS errors: /'+s,!p.errs.length,p.errs);await p.close()}
 let p,b,name;
 // image converters
@@ -32,11 +32,11 @@ p=await open('image-resizer');await files(p,['sample.png']);await p.fill('#w','4
 p=await open('jpg-to-pdf');await files(p,['sample.jpg','sample.heic']);await p.click('#go');[b]=await dl(p,'.fileout button');let pd=await PDFDocument.load(b);ok('jpg-to-pdf: 2 pages',pd.getPageCount()==2);ok('jpg-to-pdf: page 1 landscape Letter',String(Object.values(pd.getPage(0).getSize()))=='792,612',pd.getPage(0).getSize());await p.close();
 // merge
 p=await open('merge-pdf');await files(p,['a3.pdf','b2.pdf']);await p.click('#go');[b]=await dl(p,'.fileout button');pd=await PDFDocument.load(b);ok('merge: 3+2 = 5 pages',pd.getPageCount()==5);await p.close();
-p=await open('merge-pdf');await files(p,['a3.pdf','sample.jpg']);await p.click('#go');await p.waitForTimeout(800);ok('merge: invalid file reported',/not a valid PDF/.test(await p.textContent('#status')));await p.close();
+p=await open('merge-pdf');await files(p,['a3.pdf','sample.jpg']);await p.click('#go');await p.waitForTimeout(800);ok('merge: invalid file reported',LOC?await p.$eval('#status',e=>e.classList.contains('err')&&e.textContent.trim().length>0):/not a valid PDF/.test(await p.textContent('#status')));await p.close();
 // split
 p=await open('split-pdf');await files(p,['a3.pdf']);await p.waitForFunction(()=>/3 pages/.test(document.querySelector('#info').textContent));await p.fill('#rg','1, 3');await p.check('#one');await p.click('#go');[b]=await dl(p,'.fileout button');pd=await PDFDocument.load(b);ok('split: pages 1,3 → 2-page PDF',pd.getPageCount()==2);
 await p.uncheck('#one');await p.selectOption('#mode','each');await p.click('#go');await p.waitForTimeout(500);ok('split: each page → 3 files',await p.locator('.fileout').count()==3);
-await p.selectOption('#mode','ranges');await p.fill('#rg','2-9');await p.click('#go');await p.waitForTimeout(300);ok('split: out-of-range error',/out of range/.test(await p.textContent('#status')));await p.close();
+await p.selectOption('#mode','ranges');await p.fill('#rg','2-9');await p.click('#go');await p.waitForTimeout(300);ok('split: out-of-range error',LOC?await p.$eval('#status',e=>e.classList.contains('err')&&/9/.test(e.textContent)):/out of range/.test(await p.textContent('#status')));await p.close();
 // pdf to jpg
 p=await open('pdf-to-jpg');await files(p,['a3.pdf']);await p.click('#go');await p.waitForFunction(()=>document.querySelectorAll('.fileout').length==3,null,{timeout:60000});[b]=await dl(p,'.fileout button');ok('pdf-to-jpg: 3 pages, 150 DPI = 1275x1650 JPG',magic(b,'jpg')&&String(dims(b))=='1275,1650',dims(b));ok('pdf-to-jpg: no errors',!p.errs.length,p.errs);await p.close();
 // csv <-> excel
@@ -49,14 +49,14 @@ ok('xlsx→csv: content',b.toString('utf8').replace(/^\uFEFF/,'').split('\r\n')[
 async function val(p,sel){return (await p.textContent(sel)).trim()}
 p=await open('hourly-to-salary-calculator');ok('salary: $25/h → $52,000.00',(await val(p,'#r')).includes('$52,000.00'));await p.close();
 p=await open('meeting-cost-calculator');ok('meeting: default → $318.75',(await val(p,'#r')).includes('$318.75'));await p.close();
-p=await open('business-days-calculator');ok('business days Nov 2026 → 19',/included\)19/.test(await val(p,'#r')),await val(p,'#r'));ok('add 10 bd → Nov 17',(await val(p,'#r')).includes('Nov 17, 2026'));await p.close();
+p=await open('business-days-calculator');ok('business days Nov 2026 → 19',(LOC?/[)）]\s*19/:/included\)19/).test(await val(p,'#r')),await val(p,'#r'));ok('add 10 bd → Nov 17',(await val(p,'#r')).includes('Nov 17, 2026'));await p.close();
 p=await open('time-card-calculator');ok('time card default 5×8h → 40h, $800.00',(await val(p,'#r')).includes('40h 00m')&&(await val(p,'#r')).includes('$800.00'),await val(p,'#r'));await p.close();
 p=await open('percentage-calculator');ok('percent: 15% of 200 = 30',(await val(p,'#r1'))==='= 30');ok('percent change 80→100',(await val(p,'#r3')).startsWith('= +25%'));await p.close();
 p=await open('time-zone-meeting-planner');await p.selectOption('#z0','America/New_York');await p.selectOption('#z1','Europe/London');await p.selectOption('#z2','Asia/Kolkata');await p.fill('#d','2026-11-10');await p.fill('#tm','09:00');
 let tz=await val(p,'#tz');ok('tz: 9 AM NY → 2 PM London, 7:30 PM India',tz.includes('2:00 PM')&&tz.includes('7:30 PM'),tz.slice(0,300));await p.close();
-p=await open('word-counter');await p.fill('#t',"Hello world. It's a well-known test!\n\nSecond paragraph here?");ok('word counter: 9 words',(await val(p,'#st')).startsWith('9Words'),await val(p,'#st'));await p.close();
-p=await open('case-converter');await p.click('[data-m=title]');ok('case: title',(await p.inputValue('#o'))==='The Quick Brown Fox Jumps Over the Lazy Dog',await p.inputValue('#o'));await p.close();
-p=await open('text-compare');ok('diff: default summary',(await val(p,'#sum'))==='1 line(s) removed, 2 line(s) added.',await val(p,'#sum'));await p.close();
+p=await open('word-counter');await p.fill('#t',"Hello world. It's a well-known test!\n\nSecond paragraph here?");ok('word counter: 9 words',(await val(p,'#st')).startsWith(LOC?'9':'9Words'),await val(p,'#st'));await p.close();
+p=await open('case-converter');if(LOC)await p.fill('#t','the quick brown fox jumps over the lazy dog');await p.click('[data-m=title]');ok('case: title',(await p.inputValue('#o'))==='The Quick Brown Fox Jumps Over the Lazy Dog',await p.inputValue('#o'));await p.close();
+p=await open('text-compare');ok('diff: default summary',LOC?/^\D*1\D+2\D*$/.test(await val(p,'#sum')):(await val(p,'#sum'))==='1 line(s) removed, 2 line(s) added.',await val(p,'#sum'));await p.close();
 p=await open('csv-to-json');ok('csv→json default',JSON.parse(await p.inputValue('#o'))[1].name==='Lee, Sam');await p.close();
 p=await open('email-signature-generator');ok('signature preview',(await val(p,'#pv')).includes('Jordan Smith'));await p.fill('#name','<script>x</script>');ok('signature escapes HTML',(await p.innerHTML('#pv')).includes('&lt;script&gt;'));await p.close();
 // QR: decode PNG download with jsQR (pixels read in browser)

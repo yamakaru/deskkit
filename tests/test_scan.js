@@ -7,7 +7,7 @@ let n=0,fail=0;const ok=(name,c,info)=>{n++;if(!c){fail++;console.log('FAIL',nam
 const Q=JSON.parse(fs.readFileSync(path.join(S,'scans.json')));
 (async()=>{await new Promise(r=>srv.listen(8767,r));const B=process.env.BASE||'http://localhost:8767';
 const br=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox']});
-async function open(ctx,slug){const p=await ctx.newPage();p.errs=[];p.on('pageerror',e=>p.errs.push(e.message));await p.goto(B+'/'+slug+'/');return p}
+async function open(ctx,slug){const p=await ctx.newPage();p.errs=[];p.on('pageerror',e=>p.errs.push(e.message));await p.goto(B+(process.env.LP||'')+'/'+slug+'/');return p}
 async function dl(p,sel){await p.waitForSelector(sel,{timeout:180000});const [d]=await Promise.all([p.waitForEvent('download'),p.locator(sel).first().click()]);const f=path.join(OUT,d.suggestedFilename());await d.saveAs(f);return fs.readFileSync(f)}
 const ctx=await br.newContext({acceptDownloads:true,viewport:{width:1280,height:900}});
 let p=await open(ctx,'document-scanner');
@@ -35,7 +35,7 @@ await p.click('#jpg');await p.waitForFunction(()=>document.querySelectorAll('.fi
 await p.click('#ocr');await p.waitForFunction(()=>!document.querySelector('#txtw').hidden,null,{timeout:240000});const txt=await p.inputValue('#txt');
 for(const w of ['MEETING','kickoff','budget','INVOICE','Northwind','4,800.00'])ok('OCR (scanned photo) finds "'+w+'"',txt.includes(w));
 // searchable PDF -> extract text with pdf.js in page
-await p.selectOption('#ps','letter');await p.check('#srch');await p.click('#pdf');await p.waitForFunction(()=>/searchable/.test(document.querySelector('.fileout .fs')?.textContent||''),null,{timeout:240000});b=await dl(p,'.fileout button');
+await p.selectOption('#ps','letter');await p.check('#srch');await p.click('#pdf');await p.waitForFunction((w)=>(document.querySelector('.fileout .fs')?.textContent||'').includes(w),process.env.LP?JSON.parse(fs.readFileSync(path.join(__dirname,'../i18n',process.env.LP.slice(1)+'.json')))['j'+require('crypto').createHash('sha1').update(' · searchable').digest('hex').slice(0,16)].trim():'searchable',{timeout:240000});b=await dl(p,'.fileout button');
 const ptxt=await p.evaluate(async(b64)=>{const m=await import('/assets/pdf.min.mjs');m.GlobalWorkerOptions.workerSrc='/assets/pdf.worker.min.mjs';const d=await m.getDocument({data:Uint8Array.from(atob(b64),c=>c.charCodeAt(0))}).promise;let t='';for(let i=1;i<=d.numPages;i++){const c=await (await d.getPage(i)).getTextContent();t+=c.items.map(x=>x.str).join(' ')+'\n'}return t},b.toString('base64'));
 ok('searchable PDF contains text layer ("INVOICE", "Northwind")',/INVOICE/.test(ptxt)&&/Northwind/.test(ptxt),ptxt.slice(0,120));
 ok('scanner: no JS errors',!p.errs.length,p.errs);await p.close();

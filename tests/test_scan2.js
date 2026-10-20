@@ -8,7 +8,7 @@ let n=0,fail=0;const ok=(name,c,info)=>{n++;if(!c)fail++;console.log(c?'ok  ':'F
 (async()=>{await new Promise(r=>srv.listen(8768,r));const B=process.env.BASE||'http://localhost:8768';
 const br=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox']});const ctx=await br.newContext({...devices['Pixel 7']});
 const cases=[['scan1.jpg',['INVOICE','Northwind']],['scan2.jpg',['MEETING','budget']],['scan3_exif.jpg',['QUARTERLY','retention','Tuesday']],['scan4_upside.jpg',['QUARTERLY','retention','Tuesday']],['scan5_noedge.jpg',['QUARTERLY','retention','Tuesday']],['scan6_sideways.jpg',['QUARTERLY','retention','Tuesday']]];
-for(const [f,words] of cases){const p=await ctx.newPage();const errs=[];p.on('pageerror',e=>errs.push(e.message));await p.goto(B+'/document-scanner/');
+for(const [f,words] of cases){const p=await ctx.newPage();const errs=[];p.on('pageerror',e=>errs.push(e.message));await p.goto(B+(process.env.LP||'')+'/document-scanner/');
  const t0=Date.now();await p.setInputFiles('#cam',path.join(S,f));await p.waitForFunction(()=>APP.pages.length===1,null,{timeout:120000});const ms=Date.now()-t0;
  const st=await p.evaluate(()=>{const x=APP.pages[0];return {auto:x.auto,q:x.quad,W:x.src.width,H:x.src.height,skew:x.skew,rot:x.rot,vis:!document.querySelector('#pc').closest('[hidden]'),adjHidden:document.querySelector('#adj').hidden}});
  ok(`${f}: processed automatically in ${ms} ms, straightened preview shown without any click`,st.vis&&st.adjHidden,{skew:st.skew,rot:st.rot,auto:st.auto});
